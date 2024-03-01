@@ -1,6 +1,6 @@
 pub mod config;
-pub mod ffi;
 mod error;
+pub mod ffi;
 mod handler;
 pub mod message;
 mod scanners;
@@ -21,7 +21,7 @@ use std::process;
 
 pub struct HimitsuInstance {
     term_sender: Sender<()>,
-    handle: JoinHandle<()>
+    handle: JoinHandle<()>,
 }
 
 impl HimitsuInstance {
@@ -37,8 +37,12 @@ impl HimitsuInstance {
     }
 }
 
-pub fn start_himitsu(runtime: Handle, socket_path: Option<String>, configuration: config::HimitsuConfiguration) -> HResult<HimitsuInstance> {
-    env_logger::init();
+pub fn start_himitsu(
+    runtime: Handle,
+    socket_path: Option<String>,
+    configuration: config::HimitsuConfiguration,
+) -> HResult<HimitsuInstance> {
+    let _ = env_logger::try_init();
 
     let socket_path = if let Some(path) = socket_path {
         path

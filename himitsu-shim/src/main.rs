@@ -11,26 +11,40 @@ use himitsu::message::{HimitsuMessage, HimitsuResponse};
 #[tokio::main]
 async fn main() {
     debug!("Welcome To Himitsu Shim");
-
     // Himitsu Bypass Block
     let block_bypass = std::env::var("HBB").map(|x| x.len() > 0).unwrap_or(false);
-    
-    let diff = io::read_to_string(io::stdin()).unwrap();
 
-    let mut stream = match UnixStream::connect("/tmp/himitsu.sock").await {
-        Ok(stream) => stream,
-        Err(e) => {
-            println!("Failed to connect to Himitsu: {}", e);
+    let socket = match home::home_dir() {
+        Some(mut path) => {
+            path.push("Library/Group Containers/5QYJ6C8ZNT.PassportControl/himitsuSocket");
+            path.to_str().unwrap().to_string()
+        }
+        None => {
+            println!("Failed to find home directory");
             if block_bypass {
                 std::process::exit(0);
             } else {
                 std::process::exit(2);
-            }   
+            }
+        }
+    };
+
+    let diff = io::read_to_string(io::stdin()).unwrap();
+
+    let mut stream = match UnixStream::connect(&socket).await {
+        Ok(stream) => stream,
+        Err(e) => {
+            println!("Failed to connect to Himitsu: {}. Socket Path: {socket}", e);
+            if block_bypass {
+                std::process::exit(0);
+            } else {
+                std::process::exit(2);
+            }
         }
     };
 
     // Create a message to send to the local Himitsu handler
-    let scan_message = HimitsuMessage::ScanCodeDiff {diff};
+    let scan_message = HimitsuMessage::ScanCodeDiff { diff };
     let scan_message = serde_json::to_string(&scan_message).unwrap();
 
     stream.write_u32(scan_message.len() as u32).await.unwrap();
@@ -49,7 +63,10 @@ async fn main() {
         }
         HimitsuResponse::SecretsFound(secrets) => {
             for secret in secrets {
-                println!("{} was found by system {} with contents: {}", secret.name, secret.system, secret.value);
+                println!(
+                    "{} was found by system {} with contents: {}",
+                    secret.name, secret.system, secret.value
+                );
             }
             1
         }

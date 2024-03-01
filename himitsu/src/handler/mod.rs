@@ -10,10 +10,7 @@ pub use handler::HimitsuHandler;
 
 use crate::error::HResult;
 
-async fn handle_client (
-    handler: Arc<HimitsuHandler>,
-    mut stream: UnixStream,
-) -> HResult<()> {
+async fn handle_client(handler: Arc<HimitsuHandler>, mut stream: UnixStream) -> HResult<()> {
     loop {
         let message = message::parse_incoming_message(&mut stream).await?;
         trace!("message: {:?}", message);
@@ -23,11 +20,8 @@ async fn handle_client (
     }
 }
 
-pub async fn run(
-    handler: HimitsuHandler,
-    socket_path: String,
-    mut term_channel: Receiver<()>,
-) {
+pub async fn run(handler: HimitsuHandler, socket_path: String, mut term_channel: Receiver<()>) {
+    println!("Starting Himitsu at: {}", socket_path);
     let listener = UnixListener::bind(socket_path).unwrap();
     let handler = Arc::new(handler);
 
