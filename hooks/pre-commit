@@ -1,0 +1,6 @@
+#!/bin/sh
+#
+
+echo "Pre-commit was run" > /tmp/pre-commit-logs
+
+git diff --cached | target/debug/himitsu-shim
