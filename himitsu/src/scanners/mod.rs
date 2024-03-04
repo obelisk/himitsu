@@ -5,6 +5,7 @@ use serde_derive::{Deserialize, Serialize};
 
 pub type ScanResults = Vec<ScanResult>;
 
+#[derive(Deserialize)]
 pub struct Scanner {
     regex: RegexSystem,
 }

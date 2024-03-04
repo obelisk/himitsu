@@ -1,4 +1,7 @@
+use std::fmt;
+
 use regex::{Regex, RegexSet};
+use serde::{de::{MapAccess, Visitor}, Deserialize, Deserializer};
 
 use crate::ScanResults;
 
@@ -10,6 +13,47 @@ pub struct RegexSystem {
 pub struct NamedRegex {
     pub regex: Regex,
     pub name: String,
+}
+
+struct RegexSystemVisitor;
+
+impl<'de> Visitor<'de> for RegexSystemVisitor {
+    type Value = RegexSystem;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
+        formatter.write_str("A map of regexes")
+    }
+
+    fn visit_map<V>(self, mut map: V) -> Result<RegexSystem, V::Error>
+    where
+        V: MapAccess<'de>,
+    {
+        let mut regexes = Vec::new();
+        
+        while let Some(key) = map.next_key::<String>()? {
+            let regex = Regex::new(&map.next_value::<String>()?).map_err(|e| serde::de::Error::custom(e.to_string()))?;
+            regexes.push(NamedRegex {
+                regex,
+                name: key,
+            });
+        }
+
+        Ok(RegexSystem {
+            regex_set: RegexSet::new(
+                regexes.iter().map(|r| r.regex.as_str())
+            ).unwrap(),
+            regexes,
+        })
+    }
+}
+
+impl<'de> Deserialize<'de> for RegexSystem {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        deserializer.deserialize_map(RegexSystemVisitor)
+    }
 }
 
 impl RegexSystem {
