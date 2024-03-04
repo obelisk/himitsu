@@ -1,21 +1,23 @@
-use serde_derive::{Deserialize, Serialize};
 use serde::de::DeserializeOwned;
+use serde_derive::{Deserialize, Serialize};
 
-use tokio::{io::{AsyncReadExt, AsyncWriteExt}, net::UnixStream};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::UnixStream,
+};
 
 use crate::{error::HResult, HimitsuError, ScanResults};
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub enum HimitsuMessage {
-    ScanCodeDiff {
-        diff: String,
-    },
+    ScanCodeDiff { diff: String },
 }
 
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub enum HimitsuResponse {
     Clean,
     SecretsFound(ScanResults),
+    SecretsFoundSilent(ScanResults),
     Error(String),
 }
 
@@ -30,7 +32,8 @@ where
     let mut buf = vec![0; len as usize];
     AsyncReadExt::read_exact(&mut stream, &mut buf).await?;
 
-    let message: T = serde_json::from_slice(&buf).map_err(|e| HimitsuError::IncomingMessageError(e.to_string()))?;
+    let message: T = serde_json::from_slice(&buf)
+        .map_err(|e| HimitsuError::IncomingMessageError(e.to_string()))?;
 
     Ok(message)
 }
@@ -39,7 +42,8 @@ pub async fn serialize_and_send_response<T: serde::Serialize>(
     response: T,
     stream: &mut UnixStream,
 ) -> HResult<()> {
-    let response = serde_json::to_string(&response).map_err(|e| HimitsuError::OutgoingMessageError(e.to_string()))?;
+    let response = serde_json::to_string(&response)
+        .map_err(|e| HimitsuError::OutgoingMessageError(e.to_string()))?;
     stream.write_u32(response.len() as u32).await?;
     stream.write_all(response.as_bytes()).await?;
     Ok(())

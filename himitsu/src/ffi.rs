@@ -35,14 +35,16 @@ pub unsafe extern "C" fn start_himitsu(socket_path: *const c_char) -> *const Him
     Box::into_raw(Box::new(runtime))
 }
 
-// #[no_mangle]
-// pub unsafe extern "C" fn stop_himitsu(instance_ptr: *mut HimitsuRuntime) -> bool {
-//     let instance = Box::from_raw(instance_ptr);
-//     let shutdown_sender = instance.stop();
-//     rustica_agent_instance.runtime.spawn(async move {
-//         shutdown_sender.send(()).await.unwrap();
-//         println!("Sent shutdown message");
-//     });
+#[no_mangle]
+pub unsafe extern "C" fn stop_himitsu(instance_ptr: *mut HimitsuRuntime) -> bool {
+    println!("Attempting to stop Himitsu");
+    let instance = Box::from_raw(instance_ptr);
+    let sender = instance.instance.term_sender.clone();
+    instance.runtime.spawn(async move {
+        println!("Sending shutdown message");
+        sender.send(None).await.unwrap();
+        println!("Sent shutdown message");
+    });
 
-//     true
-// }
+    true
+}

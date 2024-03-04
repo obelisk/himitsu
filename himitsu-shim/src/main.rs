@@ -70,6 +70,15 @@ async fn main() {
             }
             1
         }
+        HimitsuResponse::SecretsFoundSilent(secrets) => {
+            for secret in secrets {
+                println!(
+                    "IGNORING THAT: {} was found by system {} with contents: {}",
+                    secret.name, secret.system, secret.value
+                );
+            }
+            0
+        }
         HimitsuResponse::Error(e) => {
             println!("Error: {}", e);
             2

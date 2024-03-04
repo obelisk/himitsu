@@ -19,8 +19,10 @@ extern crate log;
 use std::env;
 use std::process;
 
+use crate::config::HimitsuConfiguration;
+
 pub struct HimitsuInstance {
-    term_sender: Sender<()>,
+    term_sender: Sender<Option<HimitsuConfiguration>>,
     handle: JoinHandle<()>,
 }
 
@@ -28,7 +30,7 @@ impl HimitsuInstance {
     // Send the termination message and then wait for
     // Himitsu to shut down.
     pub async fn stop(self) {
-        let _ = self.term_sender.send(()).await;
+        let _ = self.term_sender.send(None).await;
         let _ = self.handle.await;
     }
 
@@ -54,7 +56,8 @@ pub fn start_himitsu(
 
     debug!("Starting Himitsu at: {socket_path}");
 
-    let (term_sender, term_receiver) = tokio::sync::mpsc::channel::<()>(1);
+    let (term_sender, term_receiver) =
+        tokio::sync::mpsc::channel::<Option<HimitsuConfiguration>>(1);
 
     let handler = handler::HimitsuHandler::new(configuration);
 
