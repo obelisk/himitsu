@@ -1,13 +1,26 @@
 use base64::{prelude::BASE64_STANDARD, Engine};
-use ring::{aead::{Aad, BoundKey, Nonce, NonceSequence, OpeningKey, UnboundKey, AES_256_GCM, NONCE_LEN}, error::Unspecified};
+use ring::{
+    aead::{Aad, BoundKey, Nonce, NonceSequence, OpeningKey, UnboundKey, AES_256_GCM, NONCE_LEN},
+    error::Unspecified,
+};
 use secrecy::{ExposeSecret, Secret};
 use serde_derive::Deserialize;
 
-use crate::{error::{HResult, HimitsuError}, scanners::Scanner};
+use crate::{
+    error::{HResult, HimitsuError},
+    scanners::Scanner,
+};
+
+enum ConfigurationSource {
+    Path(String),
+    Url(String, Option<Secret<String>>),
+}
 
 #[derive(Deserialize)]
 pub struct HimitsuConfiguration {
     pub scanner: Scanner,
+    #[serde(skip)]
+    source: Option<ConfigurationSource>,
 }
 
 impl From<reqwest::Error> for HimitsuError {
@@ -35,18 +48,38 @@ impl NonceSequence for SingleNonceSequence {
     }
 }
 
-
 impl HimitsuConfiguration {
     pub fn default() -> Self {
         Self {
             scanner: Scanner::default(),
+            source: None,
         }
     }
 
-    fn decrypt_configuration(data: Vec<u8>, key: Secret<String>) -> HResult<Vec<u8>> {
+    pub fn refresh(&mut self) {
+        match &self.source {
+            Some(ConfigurationSource::Path(path)) => {
+                if let Ok(config) = HimitsuConfiguration::new_from_file(path.clone()) {
+                    *self = config;
+                }
+            }
+            Some(ConfigurationSource::Url(url, key)) => {
+                if let Ok(config) = HimitsuConfiguration::new_from_url(url.clone(), key.clone()) {
+                    *self = config;
+                }
+            }
+            _ => {
+                error!("This configuration does not have a source to refresh from");
+            }
+        }
+    }
+
+    fn decrypt_configuration(data: Vec<u8>, key: &Secret<String>) -> HResult<Vec<u8>> {
         // Make sure the data is long enough to split off the nonce from the front
         if data.len() < NONCE_LEN {
-            return Err(HimitsuError::CryptographyError("Invalid configuration".to_string()));
+            return Err(HimitsuError::CryptographyError(
+                "Invalid configuration".to_string(),
+            ));
         }
 
         // Pull the nonce off the front of the encrypted data
@@ -56,52 +89,65 @@ impl HimitsuConfiguration {
         let mut in_out = config_bytes.to_vec();
         // Create the key for decrypting the configuration
         let unbound_key = UnboundKey::new(
-            &AES_256_GCM, 
-            hex::decode(key.expose_secret()).map_err(|_| HimitsuError::CryptographyError("Invalid key".to_string()))?.as_slice()
+            &AES_256_GCM,
+            hex::decode(key.expose_secret())
+                .map_err(|_| HimitsuError::CryptographyError("Invalid key".to_string()))?
+                .as_slice(),
         )
-            .map_err(|_| HimitsuError::CryptographyError("Invalid key".to_string()))?;
+        .map_err(|_| HimitsuError::CryptographyError("Invalid key".to_string()))?;
 
         // Create a new AEAD key for decrypting and verifying the authentication tag
-        let mut opening_key = OpeningKey::new(unbound_key, SingleNonceSequence(Some(nonce.to_vec())));
+        let mut opening_key =
+            OpeningKey::new(unbound_key, SingleNonceSequence(Some(nonce.to_vec())));
 
         // Decrypt the data by passing in the associated data and the cypher text with the authentication tag appended
-        let data = opening_key.open_in_place(Aad::empty(), &mut in_out).map_err(|_| HimitsuError::CryptographyError("Could not decrypt config".to_string()))?.into();
+        let data = opening_key
+            .open_in_place(Aad::empty(), &mut in_out)
+            .map_err(|_| HimitsuError::CryptographyError("Could not decrypt config".to_string()))?
+            .into();
 
         Ok(data)
     }
 
     pub fn new_from_file(path: String) -> HResult<Self> {
-        let file = std::fs::File::open(path)?;
+        let file = std::fs::File::open(&path)?;
         let reader = std::io::BufReader::new(file);
-        let config: HimitsuConfiguration = serde_json::from_reader(reader)?;
+        let mut config: HimitsuConfiguration = serde_json::from_reader(reader)?;
+        config.source = Some(ConfigurationSource::Path(path));
         Ok(config)
     }
 
     pub fn new_from_b64_string(config: String, key: Option<Secret<String>>) -> HResult<Self> {
-        let config = BASE64_STANDARD.decode(config.as_bytes()).map_err(|e| HimitsuError::EncodingError(e.to_string()))?;
+        let config = BASE64_STANDARD
+            .decode(config.as_bytes())
+            .map_err(|e| HimitsuError::EncodingError(e.to_string()))?;
 
-        if let Some(key) = key {
-            let data = Self::decrypt_configuration(config, key)?;
+        if let Some(key) = key.as_ref() {
+            let data = Self::decrypt_configuration(config, &key)?;
             Ok(serde_json::from_slice(&data)?)
-         } else {
-           Ok(serde_json::from_slice(&config)?)
-         }
+        } else {
+            Ok(serde_json::from_slice(&config)?)
+        }
     }
 
     pub fn new_from_url(url: String, key: Option<Secret<String>>) -> HResult<Self> {
         let config = reqwest::blocking::get(&url)?.text()?;
         // All configurations are encoded first
-        let mut config = BASE64_STANDARD.decode(config.as_bytes()).map_err(|e| HimitsuError::EncodingError(e.to_string()))?;
+        let mut config = BASE64_STANDARD
+            .decode(config.as_bytes())
+            .map_err(|e| HimitsuError::EncodingError(e.to_string()))?;
 
         // If we were given a key, decrypt the configuration
-        if let Some(key) = key {
-           config = Self::decrypt_configuration(config, key)?;
+        if let Some(key) = key.as_ref() {
+            config = Self::decrypt_configuration(config, key)?;
         }
 
         // Convert the decrypted data into a string we can deserialize
-        let config = String::from_utf8(config.to_vec()).map_err(|e| HimitsuError::EncodingError(e.to_string()))?;
+        let config = String::from_utf8(config.to_vec())
+            .map_err(|e| HimitsuError::EncodingError(e.to_string()))?;
 
-        let config: HimitsuConfiguration = serde_json::from_str(&config)?;
+        let mut config: HimitsuConfiguration = serde_json::from_str(&config)?;
+        config.source = Some(ConfigurationSource::Url(url, key));
         Ok(config)
     }
 }
@@ -143,8 +189,13 @@ mod tests {
             "qeFRlKZMGiWF+fNQ9eUtu/C78IGUm6uJ04S2l39A6+EbqXaj9v6dRnVbmjz8mQ8tIiq9JTuiKoCBHCu8fzIvhUYuS33WNrqxzP4L",
             "h0t09nwdWYMAQqrnKFiShiTMEFkHVwj8/8M7IFfgWRH4KAR3V/URqW5yPBw7wFYVtzIXvpGD");
 
-        let config = HimitsuConfiguration::new_from_b64_string(EXAMPLE_CONFIG.to_string(), Some(Secret::new("0000000000000000000000000000000000000000000000000000000000000000".to_string())));
-        
+        let config = HimitsuConfiguration::new_from_b64_string(
+            EXAMPLE_CONFIG.to_string(),
+            Some(Secret::new(
+                "0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+            )),
+        );
+
         if let Err(e) = config.as_ref() {
             println!("Error: {:?}", e);
         }

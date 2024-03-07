@@ -6,7 +6,7 @@ use tokio::select;
 use tokio::sync::mpsc::Receiver;
 
 use crate::config::HimitsuConfiguration;
-use crate::message;
+use crate::{message, HimitsuClientServerMessage};
 pub use handler::HimitsuHandler;
 
 use crate::error::HResult;
@@ -24,7 +24,7 @@ async fn handle_client(handler: Arc<HimitsuHandler>, mut stream: UnixStream) -> 
 pub async fn run(
     handler: HimitsuHandler,
     socket_path: String,
-    mut term_channel: Receiver<Option<HimitsuConfiguration>>,
+    mut term_channel: Receiver<HimitsuClientServerMessage>,
 ) {
     println!("Starting Himitsu at: {}", socket_path);
     let listener = UnixListener::bind(socket_path).unwrap();
@@ -34,11 +34,16 @@ pub async fn run(
         select! {
             msg = term_channel.recv() => {
                 match msg {
-                    Some(Some(configuration)) => {
-                        handler.update_configuration(configuration).await;
+                    Some(HimitsuClientServerMessage::Update) => {
+                        println!("Updating Himitsu Configuration...");
+                        handler.update_configuration().await;
                     }
-                    _ => {
-                        println!("Received termination request. Exiting...");
+                    Some(HimitsuClientServerMessage::SilenceOnce) => {
+                        println!("Silencing Next Check");
+                        handler.silence_next_check().await;
+                    }
+                    None | Some(HimitsuClientServerMessage::Shutdown) => {
+                        println!("Channel is gone, shutting down.");
                         return
                     }
                 }
