@@ -1,0 +1,13 @@
+[package]
+name = "himitsu-precommit"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+clap_derive = { version = "4.0.0-rc.1" }
+log = "0.4"
+himitsu = { path = "../himitsu" }
+home = "0.5"
+tokio = { version = "1", features = ["full"] }
+serde_json = { version = "1" }

@@ -5,7 +5,6 @@ use tokio::net::{UnixListener, UnixStream};
 use tokio::select;
 use tokio::sync::mpsc::Receiver;
 
-use crate::config::HimitsuConfiguration;
 use crate::{message, HimitsuClientServerMessage};
 pub use handler::HimitsuHandler;
 

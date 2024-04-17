@@ -1,7 +1,7 @@
 [workspace]
 resolver = "2"
 
-members = ["himitsu", "himitsu-shim"]
+members = ["himitsu", "himitsu-shim", "himitsu-precommit"]
 
 [profile.release]
 strip = "debuginfo"
