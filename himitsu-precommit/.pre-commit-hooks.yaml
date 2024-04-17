@@ -1,5 +1,5 @@
 - id: scan-for-secrets
   name: Himitsu Secret Scan
-  description: "Scans for secrets using PassportControl's Himitsu system"
+  description: "Scans for secrets using the Himitsu system"
   entry: himitsu-precommit
   language: rust
