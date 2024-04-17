@@ -1,5 +1,0 @@
-- id: scan-for-secrets
-  name: Himitsu Secret Scan
-  description: "Scans for secrets using the Himitsu system"
-  entry: himitsu-precommit
-  language: docker
