@@ -41,6 +41,10 @@ pub async fn run(
                         println!("Silencing Next Check");
                         handler.silence_next_check().await;
                     }
+                    Some(HimitsuClientServerMessage::SilenceSet{duration}) => {
+                        println!("Silencing Next Set of Checks");
+                        handler.silence_next_check_set(duration).await;
+                    }
                     None | Some(HimitsuClientServerMessage::Shutdown) => {
                         println!("Channel is gone, shutting down.");
                         return

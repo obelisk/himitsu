@@ -1,4 +1,4 @@
-use std::ffi::{c_char, CStr};
+use std::ffi::{c_char, c_int, CStr};
 
 use secrecy::Secret;
 
@@ -121,6 +121,9 @@ pub unsafe extern "C" fn himitsu_configuration_update(instance_ptr: *mut Himitsu
             .unwrap();
     });
 
+    // We need to leak again here otherwise we will free the HimitsuRuntime
+    // when we're still using it. Would be nice if Box had Box::into_weak or
+    // something similar
     Box::leak(instance);
 
     true
@@ -138,6 +141,34 @@ pub unsafe extern "C" fn himitsu_silence_next_check(instance_ptr: *mut HimitsuRu
             .unwrap();
     });
 
+    // We need to leak again here otherwise we will free the HimitsuRuntime
+    // when we're still using it. Would be nice if Box had Box::into_weak or
+    // something similar
+    Box::leak(instance);
+
+    true
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn himitsu_silence_next_check_set(
+    instance_ptr: *mut HimitsuRuntime,
+    duration: c_int,
+) -> bool {
+    println!("Silencing The Next Set of Himitsu Checks");
+    let instance = Box::from_raw(instance_ptr);
+    let sender = instance.instance.term_sender.clone();
+    instance.runtime.spawn(async move {
+        sender
+            .send(crate::HimitsuClientServerMessage::SilenceSet {
+                duration: duration as u64,
+            })
+            .await
+            .unwrap();
+    });
+
+    // We need to leak again here otherwise we will free the HimitsuRuntime
+    // when we're still using it. Would be nice if Box had Box::into_weak or
+    // something similar
     Box::leak(instance);
 
     true

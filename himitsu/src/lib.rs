@@ -22,6 +22,7 @@ use std::process;
 pub enum HimitsuClientServerMessage {
     Update,
     SilenceOnce,
+    SilenceSet { duration: u64 },
     Shutdown,
 }
 
