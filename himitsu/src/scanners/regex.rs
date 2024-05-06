@@ -1,9 +1,14 @@
 use std::fmt;
 
 use regex::{Regex, RegexSet};
-use serde::{de::{MapAccess, Visitor}, Deserialize, Deserializer};
+use serde::{
+    de::{MapAccess, Visitor},
+    Deserialize, Deserializer,
+};
 
 use crate::ScanResults;
+
+use super::ScanResult;
 
 pub struct RegexSystem {
     regexes: Vec<NamedRegex>,
@@ -29,19 +34,15 @@ impl<'de> Visitor<'de> for RegexSystemVisitor {
         V: MapAccess<'de>,
     {
         let mut regexes = Vec::new();
-        
+
         while let Some(key) = map.next_key::<String>()? {
-            let regex = Regex::new(&map.next_value::<String>()?).map_err(|e| serde::de::Error::custom(e.to_string()))?;
-            regexes.push(NamedRegex {
-                regex,
-                name: key,
-            });
+            let regex = Regex::new(&map.next_value::<String>()?)
+                .map_err(|e| serde::de::Error::custom(e.to_string()))?;
+            regexes.push(NamedRegex { regex, name: key });
         }
 
         Ok(RegexSystem {
-            regex_set: RegexSet::new(
-                regexes.iter().map(|r| r.regex.as_str())
-            ).unwrap(),
+            regex_set: RegexSet::new(regexes.iter().map(|r| r.regex.as_str())).unwrap(),
             regexes,
         })
     }
@@ -156,15 +157,10 @@ impl RegexSystem {
                 name: "NpmToken".to_owned(),
             }
         ];
-        
-        let regex_set = RegexSet::new(
-            regexes.iter().map(|r| r.regex.as_str())
-        ).unwrap();
-    
-        Self {
-            regexes,
-            regex_set,
-        }
+
+        let regex_set = RegexSet::new(regexes.iter().map(|r| r.regex.as_str())).unwrap();
+
+        Self { regexes, regex_set }
     }
 }
 
@@ -175,17 +171,18 @@ impl super::System for RegexSystem {
 
         // For any regex that matches, we need to find the actual perts that matched
         // and return those as scan results.
-        matches.iter().map(|m| {
-            let regex = &self.regexes[*m];
-            let matches = regex.regex.find_iter(haystack);
+        matches
+            .iter()
+            .map(|m| {
+                let regex = &self.regexes[*m];
+                let matches = regex.regex.find_iter(haystack);
 
-            matches.into_iter().map(|m| {
-                super::ScanResult {
-                    system: "Regex".to_owned(),
-                    name: regex.name.clone(),
-                    value: m.as_str().to_owned(),
-                }
-            }).collect::<ScanResults>()
-        }).flatten().collect()
+                matches
+                    .into_iter()
+                    .map(|m| ScanResult::new("Regex", &regex.name, m.as_str()))
+                    .collect::<ScanResults>()
+            })
+            .flatten()
+            .collect()
     }
 }
