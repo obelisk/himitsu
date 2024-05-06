@@ -173,3 +173,63 @@ pub unsafe extern "C" fn himitsu_silence_next_check_set(
 
     true
 }
+
+#[no_mangle]
+pub unsafe extern "C" fn himitsu_get_found_secrets(
+    instance_ptr: *mut HimitsuRuntime,
+) -> *const c_char {
+    println!("Fetching the last found secrets");
+    let instance = Box::from_raw(instance_ptr);
+    let sender = instance.instance.term_sender.clone();
+    let (callback, receiver) = tokio::sync::oneshot::channel();
+    instance.runtime.spawn(async move {
+        sender
+            .send(crate::HimitsuClientServerMessage::FetchLastFoundSecrets { callback })
+            .await
+            .unwrap();
+    });
+
+    let return_ptr = match instance.runtime.block_on(receiver) {
+        Ok(scan_results) => {
+            let scan_results = serde_json::to_string(&scan_results).unwrap();
+            let c_string = std::ffi::CString::new(scan_results).unwrap();
+            c_string.into_raw()
+        }
+        Err(e) => {
+            println!("Failed to fetch last found secrets: {e}");
+            std::ptr::null()
+        }
+    };
+
+    // We need to leak again here otherwise we will free the HimitsuRuntime
+    // when we're still using it. Would be nice if Box had Box::into_weak or
+    // something similar
+    Box::leak(instance);
+    return_ptr
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn himitsu_clear_found_secrets(instance_ptr: *mut HimitsuRuntime) {
+    println!("Clearing found secrets");
+    let instance = Box::from_raw(instance_ptr);
+    let sender = instance.instance.term_sender.clone();
+    instance.runtime.spawn(async move {
+        sender
+            .send(crate::HimitsuClientServerMessage::ClearFoundSecrets)
+            .await
+            .unwrap();
+    });
+
+    // We need to leak again here otherwise we will free the HimitsuRuntime
+    // when we're still using it. Would be nice if Box had Box::into_weak or
+    // something similar
+    Box::leak(instance);
+}
+
+#[no_mangle]
+pub unsafe extern "C" fn himitsu_free_string(string_ptr: *const c_char) {
+    if string_ptr.is_null() {
+        return;
+    }
+    let _ = std::ffi::CString::from_raw(string_ptr as *mut c_char);
+}

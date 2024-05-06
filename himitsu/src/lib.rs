@@ -22,7 +22,13 @@ use std::process;
 pub enum HimitsuClientServerMessage {
     Update,
     SilenceOnce,
-    SilenceSet { duration: u64 },
+    SilenceSet {
+        duration: u64,
+    },
+    FetchLastFoundSecrets {
+        callback: tokio::sync::oneshot::Sender<ScanResults>,
+    },
+    ClearFoundSecrets,
     Shutdown,
 }
 

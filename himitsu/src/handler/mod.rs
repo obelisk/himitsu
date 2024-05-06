@@ -45,6 +45,15 @@ pub async fn run(
                         println!("Silencing Next Set of Checks");
                         handler.silence_next_check_set(duration).await;
                     }
+                    Some(HimitsuClientServerMessage::FetchLastFoundSecrets{callback}) => {
+                        println!("Fetching Last Found Secrets");
+                        let results = handler.fetch_last_found_secrets().await;
+                        let _ = callback.send(results);
+                    }
+                    Some(HimitsuClientServerMessage::ClearFoundSecrets) => {
+                        println!("Clearing Found Secrets");
+                        handler.clear_found_secrets().await;
+                    }
                     None | Some(HimitsuClientServerMessage::Shutdown) => {
                         println!("Channel is gone, shutting down.");
                         return
