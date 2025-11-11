@@ -16,7 +16,7 @@ async fn main() {
 
     let socket = match home::home_dir() {
         Some(mut path) => {
-            path.push("Library/Group Containers/5QYJ6C8ZNT.PassportControl/himitsuSocket");
+            path.push("Library/Group Containers/U52857STQU.PassportControl/himitsuSocket");
             path.to_str().unwrap().to_string()
         }
         None => {
